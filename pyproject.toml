@@ -28,6 +28,9 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/gvalkov/python-evdev"
 
+[dependency-groups]
+test = ["pytest"]
+
 [tool.ruff]
 line-length = 120
 

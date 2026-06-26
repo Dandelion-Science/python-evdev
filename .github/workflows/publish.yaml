@@ -1,0 +1,95 @@
+name: publish
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+on:  # yamllint disable-line rule:truthy
+  release:
+    types: [published]
+
+jobs:
+  build:
+    if: ${{ github.repository == 'Dandelion-Science/python-evdev' }}
+    name: build py${{ matrix.python-version }}
+    runs-on: codebuild-dandelion-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.13t", "3.14", "3.14t"]
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.ARN_IAM_ROLE_GHA_CORE }}
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: Dandelion-Science/github-actions/setup-uv@main
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv build --wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.python-version }}
+          path: dist/
+
+  build-sdist:
+    if: ${{ github.repository == 'Dandelion-Science/python-evdev' }}
+    runs-on: codebuild-dandelion-linux-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.ARN_IAM_ROLE_GHA_CORE }}
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: Dandelion-Science/github-actions/setup-uv@main
+      - run: uv build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist/
+
+  publish:
+    if: ${{ github.repository == 'Dandelion-Science/python-evdev' }}
+    needs: [build, build-sdist]
+    runs-on: codebuild-dandelion-linux-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.ARN_IAM_ROLE_GHA_CORE }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          tag_name: ${{ github.event.release.tag_name }}
+      - name: Get CodeArtifact token
+        run: |
+          AWS_CODEARTIFACT_TOKEN=$(aws codeartifact get-authorization-token \
+            --domain ${{ vars.CODEARTIFACT_DOMAIN }} \
+            --domain-owner ${{ vars.CODEARTIFACT_DOMAIN_OWNER }} \
+            --query authorizationToken \
+            --output text)
+          echo "AWS_CODEARTIFACT_TOKEN=$AWS_CODEARTIFACT_TOKEN" >> $GITHUB_ENV
+      - uses: Dandelion-Science/github-actions/setup-uv@main
+      - run: uv publish
+        env:
+          UV_PUBLISH_USERNAME: aws
+          UV_PUBLISH_PASSWORD: ${{ env.AWS_CODEARTIFACT_TOKEN }}
+          UV_PUBLISH_URL: ${{ vars.CODEARTIFACT_DANDELION_PYPI_REPOSITORY_URL }}
