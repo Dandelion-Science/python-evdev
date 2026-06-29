@@ -1,0 +1,79 @@
+name: publish
+concurrency:
+  group: ${{ github.workflow }}
+on:  # yamllint disable-line rule:truthy
+  release:
+    types: [published]
+
+jobs:
+  build-wheels:
+    if: ${{ github.repository == 'Dandelion-Science/python-evdev' }}
+    name: wheels on ${{ matrix.os }}
+    # evdev is Linux-only (needs <linux/input.h>); no macOS/Windows wheels are
+    # possible. Native runners build their own arch (archs = "native"), no QEMU.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pypa/cibuildwheel@v4.1.0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  build-sdist:
+    if: ${{ github.repository == 'Dandelion-Science/python-evdev' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
+  publish:
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.ARN_IAM_ROLE_GHA_CORE }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: cibw-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          tag_name: ${{ github.event.release.tag_name }}
+      - name: Get CodeArtifact token
+        run: |
+          AWS_CODEARTIFACT_TOKEN=$(aws codeartifact get-authorization-token \
+            --domain ${{ vars.CODEARTIFACT_DOMAIN }} \
+            --domain-owner ${{ vars.CODEARTIFACT_DOMAIN_OWNER }} \
+            --query authorizationToken \
+            --output text)
+          echo "AWS_CODEARTIFACT_TOKEN=$AWS_CODEARTIFACT_TOKEN" >> $GITHUB_ENV
+      - uses: Dandelion-Science/github-actions/setup-uv@main
+      - run: uv publish
+        env:
+          UV_PUBLISH_USERNAME: aws
+          UV_PUBLISH_PASSWORD: ${{ env.AWS_CODEARTIFACT_TOKEN }}
+          UV_PUBLISH_URL: ${{ vars.CODEARTIFACT_PYPI_STORE_REPOSITORY_URL }}

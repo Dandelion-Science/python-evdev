@@ -1,0 +1,34 @@
+name: pytest
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number }}-${{ github.event.ref }}
+  cancel-in-progress: true
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    if: ${{ !cancelled() && github.repository == 'Dandelion-Science/python-evdev' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    name: py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.13t", "3.14", "3.14t"]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          activate-environment: true
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync -q --no-default-groups --group test
+      # test_uinput.py needs root (opens /dev/uinput) and does not skip without it,
+      # so the rest of the suite runs as the normal user and uinput runs under sudo.
+      - run: pytest tests --ignore=tests/test_uinput.py
+      - run: sudo modprobe uinput
+      - run: sudo .venv/bin/pytest tests/test_uinput.py

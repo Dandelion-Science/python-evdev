@@ -28,11 +28,33 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/gvalkov/python-evdev"
 
+[dependency-groups]
+test = ["pytest"]
+
 [tool.ruff]
 line-length = 120
 
 [tool.ruff.lint]
 ignore = ["E265", "E241", "F403", "F401", "E401", "E731"]
+
+[tool.cibuildwheel]
+# evdev is Linux-only (needs <linux/input.h>): no macOS/Windows wheels exist.
+# Build CPython 3.11-3.14 incl. the free-threaded 3.13t/3.14t builds; glibc only
+# (musllinux skipped), CPython only (no PyPy).
+build = ["cp311-*", "cp312-*", "cp313-*", "cp314-*", "cp313t-*", "cp314t-*"]
+enable = ["cpython-freethreading"]
+skip = ["*-musllinux*", "pp*"]
+archs = "native"
+build-frontend = "build[uv]"
+# Smoke-test that the wheel imports and every compiled extension loads.
+test-command = "python -c \"import evdev, evdev.ecodes, evdev._input, evdev._uinput, evdev._ecodes\""
+
+[tool.cibuildwheel.linux]
+# manylinux images are glibc/AlmaLinux based and normally ship kernel-headers
+# (pulled in by glibc-devel), but evdev's build hard-fails without <linux/input.h>;
+# ensure they are present. No-op when already installed.
+before-all = "yum install -y kernel-headers || true"
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 
 [tool.bumpversion]
 current_version = "1.9.3"
