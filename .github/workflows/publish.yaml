@@ -71,7 +71,7 @@ jobs:
             --query authorizationToken \
             --output text)
           echo "AWS_CODEARTIFACT_TOKEN=$AWS_CODEARTIFACT_TOKEN" >> $GITHUB_ENV
-      - uses: Dandelion-Science/github-actions/setup-uv@main
+      - uses: astral-sh/setup-uv@v7
       - run: uv publish
         env:
           UV_PUBLISH_USERNAME: aws
