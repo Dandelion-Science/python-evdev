@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evdev"
-version = "1.9.3"
+version = "1.9.3.post1"
 description = "Bindings to the Linux input handling subsystem"
 keywords = ["evdev", "input", "uinput"]
 readme = "README.md"
@@ -42,7 +42,6 @@ ignore = ["E265", "E241", "F403", "F401", "E401", "E731"]
 # Build CPython 3.11-3.14 incl. the free-threaded 3.13t/3.14t builds; glibc only
 # (musllinux skipped), CPython only (no PyPy).
 build = ["cp311-*", "cp312-*", "cp313-*", "cp314-*", "cp313t-*", "cp314t-*"]
-enable = ["cpython-freethreading"]
 skip = ["*-musllinux*", "pp*"]
 archs = "native"
 build-frontend = "build[uv]"
@@ -57,7 +56,7 @@ before-all = "yum install -y kernel-headers || true"
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 
 [tool.bumpversion]
-current_version = "1.9.3"
+current_version = "1.9.3.post1"
 commit = true
 tag = true
 allow_dirty = true
