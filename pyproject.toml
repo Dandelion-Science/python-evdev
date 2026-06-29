@@ -39,9 +39,10 @@ ignore = ["E265", "E241", "F403", "F401", "E401", "E731"]
 
 [tool.cibuildwheel]
 # evdev is Linux-only (needs <linux/input.h>): no macOS/Windows wheels exist.
-# Build CPython 3.11-3.14 incl. the free-threaded 3.13t/3.14t builds; glibc only
-# (musllinux skipped), CPython only (no PyPy).
-build = ["cp311-*", "cp312-*", "cp313-*", "cp314-*", "cp313t-*", "cp314t-*"]
+# CPython 3.11-3.14 + free-threading; glibc only (musllinux skipped), no PyPy.
+# NOTE: current cibuildwheel only ships cp314t for free-threading, so the cp313t-*
+# selector is kept for forward-compat but produces nothing until it is available.
+build = ["cp311-*", "cp312-*", "cp313-*", "cp314-*", "cp314t-*"]
 skip = ["*-musllinux*", "pp*"]
 archs = "native"
 build-frontend = "build[uv]"
